@@ -40,6 +40,9 @@ TRACKS = (
 TRACK_FILES = {f"{stem_id}.wav" for stem_id, _label in TRACKS}
 
 
+RIGHTS_ERROR = "confirm you own this recording or have permission to use it"
+
+
 def parse_settings(raw) -> dict:
     if raw is None:
         raw = {}

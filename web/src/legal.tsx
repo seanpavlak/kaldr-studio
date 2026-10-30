@@ -78,6 +78,7 @@ export function Terms() {
       <h2>3. User-Provided Content</h2>
       <p>You retain whatever ownership and intellectual property rights you already possess in images, artwork, prompts, and other materials you submit to the Service (“User Content”).</p>
       <p>By submitting User Content, you represent and warrant that you possess the rights, licenses, permissions, or other lawful authority necessary to authorize the requested processing.</p>
+      <p>Before making a loop, you must confirm that you own each recording or have permission to use it. That confirmation is your representation under this section. Removing the vocals does not remove the rights in the song: its melody, chords, and other musical elements remain protected, and a loop made from a recording you have no rights to may infringe them.</p>
       <p>You grant Kaldr Studio a limited, nonexclusive authorization to access, process, transform, and store User Content as reasonably necessary to provide the Service.</p>
       <p>Where you initiate an operation requiring external AI processing, you also authorize transmission of the necessary User Content to OpenRouter and the selected model provider.</p>
       <p>This authorization does not transfer ownership of User Content to Kaldr Studio.</p>

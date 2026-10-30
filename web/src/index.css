@@ -303,6 +303,19 @@ form {
   backdrop-filter: blur(8px);
 }
 
+.rights {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rights input { margin: 2px 0 0; accent-color: var(--accent); cursor: pointer; }
+.rights:has(input:checked) { color: var(--ink); }
+
 .dock-note {
   text-align: center;
   font-size: 11.5px;

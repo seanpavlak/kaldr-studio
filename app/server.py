@@ -704,6 +704,8 @@ class Handler(BaseHTTPRequestHandler):
     def _audio_score_url(self) -> None:
         try:
             payload = self._json_body()
+            if payload.get("rights") is not True:
+                raise ValueError(audio_jobs.RIGHTS_ERROR)
             viewed = audio_jobs.begin_url(payload.get("url"), payload.get("settings"), PIPELINE_LOCK)
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
@@ -719,6 +721,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "that file is larger than 80 MB"})
             return
         try:
+            if self.headers.get("X-Audio-Rights") != "confirmed":
+                raise ValueError(audio_jobs.RIGHTS_ERROR)
             settings = self._audio_settings()
         except ValueError as exc:
             self.rfile.read(length)

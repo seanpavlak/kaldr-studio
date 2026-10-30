@@ -195,12 +195,16 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
   const [sheetError, setSheetError] = useState('')
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [talking, setTalking] = useState(false)
+  const [rightsFor, setRightsFor] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const stageRef = useRef<HTMLElement>(null)
   const alive = useRef(true)
   const clipRef = useRef<string | null>(null)
   useSubmitShortcut(formRef)
+  // Every new recording needs its own rights confirmation.
+  const recordings = batch ? items.map((item) => item.key).join('|') : source?.kind === 'url' ? source.url : source ? `${source.file.name}:${source.file.size}` : ''
+  const rights = recordings !== '' && rightsFor === recordings
   useEffect(() => {
     document.title = 'KALDR STUDIO'
     alive.current = true
@@ -374,13 +378,14 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
       ? await fetch('/audio/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: item.url, settings: chosen }),
+        body: JSON.stringify({ url: item.url, settings: chosen, rights: true }),
       })
       : await fetch('/audio/score/file', {
         method: 'POST',
         headers: {
           'X-Audio-Name': encodeURIComponent(item.file.name),
           'X-Audio-Settings': JSON.stringify(chosen),
+          'X-Audio-Rights': 'confirmed',
         },
         body: item.file,
       })
@@ -448,7 +453,7 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
 
   async function onScore(event: FormEvent) {
     event.preventDefault()
-    if (busy || !source) return
+    if (busy || !source || !rights) return
     sfx.pop()
     setBusy(true)
     try {
@@ -465,7 +470,7 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
 
   async function onBatch(event: FormEvent) {
     event.preventDefault()
-    if (busy || !items.length) return
+    if (busy || !items.length || !rights) return
     setBusy(true)
     setStarted(true)
     sfx.pop()
@@ -763,6 +768,12 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
           </div>
           <div className="dock">
             <p className="source-note dock-note">Runs locally. No vocals, no OpenRouter charge.</p>
+            {!speech && (
+              <label className="rights">
+                <input type="checkbox" checked={rights} disabled={busy} onChange={(event) => { sfx.tap(); setRightsFor(event.target.checked ? recordings : null) }} />
+                <span>{batch ? 'I own these recordings or have permission to use them.' : 'I own this recording or have permission to use it.'}</span>
+              </label>
+            )}
             {batch && started && !busy && (
               <button
                 type="button"
@@ -775,7 +786,7 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
                 New batch
               </button>
             )}
-            <button type="submit" className={busy ? 'make busy' : 'make shine'} disabled={busy || (!speech && (batch ? items.length === 0 : !source))}>
+            <button type="submit" className={busy ? 'make busy' : 'make shine'} disabled={busy || (!speech && (!rights || (batch ? items.length === 0 : !source)))}>
               {busy
                 ? <><span className="dots" aria-hidden="true"><i /><i /><i /></span> Working</>
                 : <>{speech ? <Megaphone aria-hidden="true" /> : <Music aria-hidden="true" />} {speech ? 'Speak' : batch ? 'Make batch' : 'Make loop'} <Shortcut /></>}
