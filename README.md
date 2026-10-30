@@ -70,11 +70,19 @@ To work on the interface, run `npm run dev` in `web/` alongside the server. Vite
 
 Kaldr Industries LLC receives nothing from a self-hosted copy.
 
+## Models
+
+| Step | Model | Runs | License |
+|---|---|---|---|
+| Redraw | FLUX.2 Klein 4B by default, or another model you pick | On OpenRouter | Apache-2.0 for Klein 4B; others under their provider's terms |
+| Background removal | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) | On this machine | MIT |
+| Stem separation | [Demucs](https://github.com/facebookresearch/demucs) `htdemucs` | On this machine | MIT |
+
+BiRefNet and Demucs download on first use. BiRefNet takes about 16 seconds per image on Apple silicon. All three defaults allow commercial use of what they produce.
+
 ## Your inputs and outputs
 
 You need the right to use whatever you put into the studio. Redrawing, pixelating or animating someone else's art does not make it yours, and it doesn't make it safe to sell. Kaldr Studio does not check whether an image, song or video is cleared for your use.
-
-The background-removal model, [BRIA RMBG-2.0](https://huggingface.co/briaai/RMBG-2.0), is licensed for non-commercial use only. If you make sprites for commercial use, get a commercial license from BRIA or switch `scripts/pixelate.py` to a model whose license allows it.
 
 The Audio Builder can download audio from a URL with `yt-dlp`. Only use it on recordings you have the right to download and adapt.
 

@@ -48,9 +48,8 @@ External tools
 Models and services
 -------------------------------------------------------------------------------
 
-BRIA RMBG-2.0 (background removal, downloaded by rembg on first use) is
-licensed for non-commercial use only. Commercial use requires a license
-from BRIA AI.
+BiRefNet (background removal, downloaded by rembg on first use) is
+licensed under MIT.
 
 Image redraws are sent to OpenRouter and the model the user selects, under
 those providers' own terms. Users supply their own OpenRouter API key.

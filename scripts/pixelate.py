@@ -34,7 +34,7 @@ _session = None
 def _get_session():
     global _session
     if _session is None:
-        _session = new_session("bria-rmbg")
+        _session = new_session("birefnet-general")  # MIT; matches BRIA RMBG-2.0, which is non-commercial
     return _session
 
 
