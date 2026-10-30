@@ -4,7 +4,7 @@ Each missing creature is drawn from its closest family member's pass-1 render pl
 generation_prompt_notes, so it keeps the family look. Its Resonant and Aberrant forms then come
 from the new base render, like every other creature. Outputs are named by index_name.
 
-    .venv/bin/python scripts/generate_missing.py [--only NAME ...] [--force]
+    .venv/bin/python -m scripts.generate_missing [--only NAME ...] [--force]
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ import json
 import zlib
 from pathlib import Path
 
-from pixelate import pixelate_file
-from redesign import palette_key
-from run_pipeline import ASSETS_FINAL, ASSETS_TEMP, ROOT, VARIANT_PROMPTS, run_pass1
+from scripts.pixelate import pixelate_file
+from scripts.redesign import palette_key
+from scripts.run_pipeline import ASSETS_FINAL, ASSETS_TEMP, ROOT, VARIANT_PROMPTS, run_pass1
 
 DEX = ROOT / "private" / "dex"
 GENERATED_ART = DEX / "_tools" / "generated_art.json"  # creature name -> file key; survives re-indexing

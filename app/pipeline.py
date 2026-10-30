@@ -28,7 +28,6 @@ ROOT = Path(__file__).resolve().parent.parent
 JOBS = ROOT / "studio_jobs"
 MAX_BYTES = 20 * 1024 * 1024
 MAX_PIXELS = 16_000_000
-_SCRIPTS = ROOT / "scripts"
 
 # Defaults match scripts/pixelate.py. Ranges are what the studio page offers.
 RENDER_SPEC = {
@@ -51,11 +50,6 @@ RENDER_LABELS = {
     "outline": "outline must be true or false",
     "sticker": "sticker border must be true or false",
 }
-
-
-def _scripts_on_path() -> None:
-    if str(_SCRIPTS) not in sys.path:
-        sys.path.insert(0, str(_SCRIPTS))
 
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/images"
@@ -99,10 +93,21 @@ def _model_spec(model_id: str) -> dict:
 
 
 def _key_path() -> Path:
-    folder = Path.home() / "Library/Application Support/sprite-studio"
-    folder.mkdir(mode=0o700, exist_ok=True)
+    support = Path.home() / "Library/Application Support"
+    folder = support / "kaldr-studio"
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(folder, 0o700)
-    return folder / "openrouter.key"
+    path = folder / "openrouter.key"
+    # Earlier versions kept the key under the old name. Move it once, so nobody has to add it again.
+    legacy = support / "sprite-studio" / "openrouter.key"
+    if not path.exists() and legacy.is_file() and not legacy.is_symlink():
+        os.replace(legacy, path)
+        os.chmod(path, 0o600)
+        try:
+            legacy.parent.rmdir()
+        except OSError:
+            pass
+    return path
 
 
 def openrouter_key_saved() -> bool:
@@ -235,8 +240,7 @@ def _reference_png(image: Path) -> bytes:
 
 def openrouter_redraw(image: Path, out: Path, seed: int, prompt: Path | None = None, model: str | None = None) -> None:
     """Redraw a reference into a square PNG with one of the curated OpenRouter models."""
-    _scripts_on_path()
-    from run_pipeline import CONVERSION_PROMPT
+    from scripts.run_pipeline import CONVERSION_PROMPT
 
     spec = _model_spec(model or DEFAULT_MODEL)
     prompt_text = (prompt or CONVERSION_PROMPT).read_text().strip()
@@ -281,7 +285,7 @@ def openrouter_redraw(image: Path, out: Path, seed: int, prompt: Path | None = N
     if first.get("b64_json"):
         raw = base64.b64decode(first["b64_json"])
     elif first.get("url"):
-        image_req = urllib.request.Request(first["url"], headers={"User-Agent": "keepers-sprite-studio"})
+        image_req = urllib.request.Request(first["url"], headers={"User-Agent": "kaldr-studio"})
         try:
             with urllib.request.urlopen(image_req, timeout=60, context=context) as resp:
                 raw = resp.read()
@@ -304,8 +308,7 @@ def mflux_redraw(image: Path, out: Path, seed: int, prompt: Path | None = None, 
     # sys.executable is a venv symlink. Resolving it leaves the venv and loses mflux.
     bin_dir = str(Path(sys.executable).parent)
     os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
-    _scripts_on_path()
-    from run_pipeline import CONVERSION_PROMPT, run_pass1
+    from scripts.run_pipeline import CONVERSION_PROMPT, run_pass1
 
     try:
         run_pass1(image, out, seed, prompt or CONVERSION_PROMPT)
@@ -347,7 +350,7 @@ def save_image_bytes(data: bytes, dest: Path, *, bad: str) -> None:
 
 def download_reference(url: str, dest: Path) -> None:
     """Save the URL as a PNG. Raises RuntimeError when it is not a usable image."""
-    req = urllib.request.Request(url, headers={"User-Agent": "keepers-sprite-studio"})
+    req = urllib.request.Request(url, headers={"User-Agent": "kaldr-studio"})
     # The python.org Mac install has no default CA bundle, so HTTPS checks use certifi.
     context = ssl.create_default_context(cafile=certifi.where())
     try:
@@ -476,8 +479,7 @@ def parse_render(raw: object) -> dict:
 
 
 def _finish_sprite(stylized: Path, workdir: Path, seed_key: str, render: dict, on_stage) -> None:
-    _scripts_on_path()
-    from pixelate import pixelate
+    from scripts.pixelate import pixelate
 
     with Image.open(stylized) as img:
         sprite_img = pixelate(
@@ -495,7 +497,7 @@ def _finish_sprite(stylized: Path, workdir: Path, seed_key: str, render: dict, o
     sprite_img.save(final)
 
     on_stage("animate")
-    from animate import build_one
+    from scripts.animate import build_one
 
     sprite = np.array(sprite_img.convert("RGBA"))
     frames, meta = build_one(sprite, seed_key)

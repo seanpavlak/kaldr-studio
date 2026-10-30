@@ -1,6 +1,11 @@
+certifi==2026.7.22
 demucs==4.1.0
+jsonschema==4.26.0
 librosa==1.0.0
 numpy==2.5.3
+onnxruntime==1.31.0
+pillow==12.3.0
+rembg==2.0.85
 scipy==1.18.1
 soundfile==0.14.0
 torch==2.8.0

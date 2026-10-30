@@ -19,12 +19,11 @@ import argparse
 import json
 import re
 import subprocess
-import sys
 import time
 import zlib
 from pathlib import Path
 
-from pixelate import pixelate_file
+from scripts.pixelate import pixelate_file
 
 ROOT = Path(__file__).resolve().parent.parent
 ART = ROOT / "private" / "art"

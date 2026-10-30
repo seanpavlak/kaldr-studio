@@ -43,17 +43,18 @@ The [license text](LICENSE.md) is what counts. This summary is only a guide. For
 ```bash
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/pip install rembg onnxruntime pillow certifi jsonschema
 
 cd web
 npm ci
 npm run build
 cd ..
 
-.venv/bin/python app/server.py            # http://127.0.0.1:8765
+.venv/bin/python -m app.server            # http://127.0.0.1:8765
 ```
 
-Open `http://127.0.0.1:8765`, then add your OpenRouter key in the studio. The key is saved on this machine only, in `~/Library/Application Support/sprite-studio/`, readable only by your user.
+Run it from the repository folder. `requirements.txt` pins every Python dependency to an exact version.
+
+Open `http://127.0.0.1:8765`, then add your OpenRouter key in the studio. The key is saved on this machine only, in `~/Library/Application Support/kaldr-studio/`, readable only by your user. A key saved by an earlier version under `sprite-studio/` moves there on its own.
 
 The server listens on `127.0.0.1` only, so nothing outside this machine can reach it. Change that only if you add your own authentication in front of it.
 
@@ -133,7 +134,7 @@ curl -F text="Want to buy something?" -F pitch=440 -F seed=7 -o line.wav http://
 | Images you redraw | To OpenRouter and the model you pick, using your key |
 | Audio and text | Nowhere. Loops and beep speech are made on this machine |
 | Jobs and outputs | `studio_jobs/` in this folder |
-| Your OpenRouter key | `~/Library/Application Support/sprite-studio/openrouter.key` |
+| Your OpenRouter key | `~/Library/Application Support/kaldr-studio/openrouter.key` |
 
 Kaldr Industries LLC receives nothing from a self-hosted copy.
 
@@ -157,15 +158,16 @@ The Audio Builder can download audio from a URL with `yt-dlp`. Only use it on re
 
 | Path | What it holds |
 |---|---|
-| `app/` | The local API server, sprite pipeline and audio jobs |
+| `app/` | The local server (`server.py`, with routes in `routes_*.py`), sprite pipeline and jobs, and audio jobs |
 | `web/` | The studio interface (React, Vite) |
 | `scripts/` | Command-line sprite pipeline: redraw, pixelate, recolor, animate |
 | `prompts/` | Prompts for the redraw models |
-| `retroloop.py` | Song to vocal-free retro loop |
+| `retroloop/` | Song to vocal-free retro loop |
 | `beep_speech/` | Text to beep speech ([README](beep_speech/README.md)) |
+| `tests/` | Tests for the server, the API and the settings each generator accepts |
 | `private/` | Your own art and game data. Gitignored, never published |
 
-Some scripts in `scripts/` were written for a game's own data and expect files under `private/` that aren't in this repository.
+Run a script as a module from the repository folder, for example `.venv/bin/python -m scripts.animate`. Some scripts in `scripts/` were written for a game's own data and expect files under `private/` that aren't in this repository.
 
 ## Contributing
 

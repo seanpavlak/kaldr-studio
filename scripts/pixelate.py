@@ -14,7 +14,7 @@ import zlib
 
 import numpy as np
 from PIL import Image, ImageEnhance
-from rembg import remove, new_session
+from rembg import new_session, remove
 
 CANVAS = 48
 PALETTE_COLORS = 14

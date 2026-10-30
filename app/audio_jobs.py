@@ -6,12 +6,10 @@ The vocal recording itself is never written into the file.
 
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
 import re
 import subprocess
-import sys
 import tempfile
 import threading
 import uuid
@@ -19,9 +17,8 @@ import zipfile
 from pathlib import Path
 from urllib.parse import urlparse
 
-import pipeline
+from app import pipeline
 
-ROOT = Path(__file__).resolve().parents[1]
 AUDIO = pipeline.JOBS / "_audio"
 MAX_BYTES = 80 * 1024 * 1024
 MAX_TEXT = 600
@@ -380,18 +377,11 @@ def _public_error(exc: Exception) -> str:
 
 
 def _beep_speech():
-    path = ROOT / "beep_speech" / "beep_speech.py"
-    spec = importlib.util.spec_from_file_location("kaldr_beep_speech", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("beep speech is not available")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from beep_speech import beep_speech
+    return beep_speech
 
 
 def _retroloop():
-    root = str(ROOT)
-    if root not in sys.path:
-        sys.path.insert(0, root)
-    import retroloop
+    # Imported on first use: it loads torch and Demucs.
+    from retroloop import retroloop
     return retroloop

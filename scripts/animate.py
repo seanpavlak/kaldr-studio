@@ -23,7 +23,7 @@ Outputs in assets_final/anim/:
 
 build_one() does the same analysis for a single sprite that is not in the dex.
 
-    .venv/bin/python scripts/animate.py [NAME ...]
+    .venv/bin/python -m scripts.animate [NAME ...]
 """
 
 from __future__ import annotations

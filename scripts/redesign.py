@@ -4,7 +4,7 @@ The base is generated from text alone, then Resonant and Aberrant are drawn from
 usual. The creature is recorded in private/dex/_tools/generated_art.json (so the dex uses this art) and its
 source image is skipped by run_pipeline.py (so a rerun can't bring the old look back).
 
-    .venv/bin/python scripts/redesign.py [NAME ...]
+    .venv/bin/python -m scripts.redesign [NAME ...]
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ import sys
 import zlib
 from pathlib import Path
 
-from pixelate import pixelate_file
-from run_pipeline import ASSETS_FINAL, ASSETS_TEMP, ROOT, VARIANT_PROMPTS, MODEL, run_pass1
+from scripts.pixelate import pixelate_file
+from scripts.run_pipeline import ASSETS_FINAL, ASSETS_TEMP, MODEL, ROOT, VARIANT_PROMPTS, run_pass1
 
 TOOLS = ROOT / "private" / "dex" / "_tools"
 GENERATED_ART = TOOLS / "generated_art.json"

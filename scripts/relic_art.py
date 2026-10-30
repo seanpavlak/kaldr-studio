@@ -8,8 +8,8 @@ The same two passes as creature sprites (see run_pipeline.py), with an object pr
 Renders are keyed by source number (private/dex/_tools/relic_sources.json), so renaming a relic only redoes pass 2.
 Resumable: existing renders and sprites are skipped unless --force.
 
-    .venv/bin/python scripts/relic_art.py              # every relic in relics.txt
-    .venv/bin/python scripts/relic_art.py --src 4 62   # just these sources
+    .venv/bin/python -m scripts.relic_art              # every relic in relics.txt
+    .venv/bin/python -m scripts.relic_art --src 4 62   # just these sources
 """
 
 from __future__ import annotations
@@ -17,14 +17,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 import time
 import zlib
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pixelate import pixelate_file  # noqa: E402
-from run_pipeline import run_pass1  # noqa: E402
+from scripts.pixelate import pixelate_file
+from scripts.run_pipeline import run_pass1
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "private" / "art" / "relics_raw"

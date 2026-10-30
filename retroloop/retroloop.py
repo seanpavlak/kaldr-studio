@@ -14,9 +14,9 @@ Pipeline:
      past the end are wrapped onto the start, so the loop point is sample-exact.
 
 Usage:
-  python retroloop.py song.mp3
-  python retroloop.py "https://www.youtube.com/watch?v=..."
-  python retroloop.py song.mp3 --min-seconds 30 --max-seconds 60 --preview
+  python retroloop/retroloop.py song.mp3
+  python retroloop/retroloop.py "https://www.youtube.com/watch?v=..."
+  python retroloop/retroloop.py song.mp3 --min-seconds 30 --max-seconds 60 --preview
 
 Outputs <out>/<name>.wav and <name>.ogg (use these in-game; MP3 adds encoder
 padding that breaks gapless looping).
@@ -35,6 +35,7 @@ import soundfile as sf
 import torch
 from scipy.signal import butter, lfilter
 
+
 class LoopError(Exception):
     """A problem the person can act on. The command line exits with this message."""
 
@@ -43,7 +44,7 @@ SR = 44100
 HOP = 512
 STEPS_PER_BEAT = 4
 STEPS_PER_BAR = 16
-CACHE_DIR = Path(__file__).parent / ".cache"
+CACHE_DIR = Path(__file__).resolve().parent.parent / ".cache"
 YT_DLP = [sys.executable, "-m", "yt_dlp"]  # the venv copy; YouTube breaks old yt-dlp versions often
 
 
@@ -53,7 +54,7 @@ def fetch(src: str, workdir: Path) -> Path:
     if not re.match(r"https?://", src):
         return Path(src)
     out = workdir / "download.%(ext)s"
-    for attempt in range(3):  # YouTube intermittently returns 403; a retry usually works
+    for _attempt in range(3):  # YouTube intermittently returns 403; a retry usually works
         if subprocess.run([*YT_DLP, "-x", "--audio-format", "mp3", "--no-playlist", "-o", str(out), src]).returncode == 0:
             break
     else:
@@ -212,7 +213,7 @@ def harmony(other: np.ndarray, bass: np.ndarray, bounds: np.ndarray, key=None):
             continue
         if key is not None:
             # the key's own chord that best matches what's sounding
-            def fit(tri):
+            def fit(tri, c=c):
                 return sum(c[pc] for pc in tri[1]) - 0.35 * sum(c[pc] for pc in range(12) if pc not in tri[1]) / 9
             root, tri = max(triads, key=fit)
             notes = tuple(sorted(57 + (pc - 57) % 12 for pc in tri))  # voiced between A3 and G#4
@@ -337,7 +338,7 @@ def chords_by_half_bar(chroma: np.ndarray, active: np.ndarray, key) -> list:
             continue
         c = window[on].sum(0)
 
-        def fit(tri):
+        def fit(tri, c=c):
             return sum(c[pc] for pc in tri[1]) - 0.35 * sum(c[pc] for pc in range(12) if pc not in tri[1]) / 9
 
         best = max(triads, key=fit)
@@ -425,7 +426,7 @@ def drum_hits(drums: np.ndarray, bounds: np.ndarray) -> np.ndarray:
     z = (z - z.mean(0)) / (z.std(0) + 1e-9)
     times = librosa.frames_to_time(onsets, sr=SR, hop_length=HOP)
     steps = np.clip(np.searchsorted(bounds, times - 0.5 * np.diff(bounds).mean()), 0, len(hits) - 1)
-    for s, (low, mid, high) in zip(steps, z):
+    for s, (low, mid, _high) in zip(steps, z):
         kind = 3 if low > 0.5 and low >= mid else 2 if mid > 0.3 else 1
         hits[s] = max(hits[s], kind)
     return hits
@@ -780,7 +781,7 @@ def room(loop, mix=0.18):
     for ch in range(2):
         x = loop[ch]
         acc = np.zeros_like(x)
-        for i, ms in enumerate((29.7, 37.1, 41.1, 43.7)):
+        for ms in (29.7, 37.1, 41.1, 43.7):
             d = int(ms * SR / 1000) + ch * 7
             a = np.zeros(d + 1)
             a[0], a[d] = 1.0, -0.72

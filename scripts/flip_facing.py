@@ -1,9 +1,9 @@
 """Mirror creatures left-to-right and toggle them in private/dex/_tools/facing.txt, so re-renders keep the new facing.
 
-    .venv/bin/python scripts/flip_facing.py NAME [NAME ...]
+    .venv/bin/python -m scripts.flip_facing NAME [NAME ...]
 
 Flips all three forms (base, Resonant, Aberrant). Rebuild their animations and the dex afterwards:
-    .venv/bin/python scripts/animate.py NAME ... && .venv/bin/python private/dex/_tools/gen_dex.py && .venv/bin/python private/dex/_tools/build_viewer.py
+    .venv/bin/python -m scripts.animate NAME ... && .venv/bin/python private/dex/_tools/gen_dex.py && .venv/bin/python private/dex/_tools/build_viewer.py
 """
 import glob
 import json

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kaldr-studio"
+version = "0.1.0"
+description = "Turns pictures into game-ready pixel art and songs into game-ready loops, on your own machine."
+readme = "README.md"
+license = { file = "LICENSE.md" }
+requires-python = ">=3.12,<3.13"
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+packages = ["app", "beep_speech", "retroloop", "scripts"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 140
+extend-exclude = ["web", "private", "studio_jobs", "out"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N"]
+ignore = [
+    "E501",  # model tables and prompts are long strings; wrapping them reads worse
+    "E741",  # `l` in short comprehensions over lines
+    "B905",  # strict= on zip would change what the audio and pixel code does today
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

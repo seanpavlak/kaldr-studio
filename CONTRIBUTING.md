@@ -5,7 +5,8 @@ Thanks for helping with Kaldr Studio. Bug reports, fixes and small improvements 
 ## Before you open a pull request
 
 - Keep each pull request to one change.
-- Run the web build (`npm run build` in `web/`) and check the change in the running studio.
+- Run the checks CI runs. For Python, install `requirements-dev.txt`, then run `ruff check .` and `pytest` from the repository folder. For the web, run `npm run lint` and `npm run build` in `web/`.
+- Check the change in the running studio.
 - Don't commit art, audio, model weights, API keys or anything under `private/`.
 - Only submit work you wrote yourself, or work whose license lets you contribute it under the terms below.
 

@@ -4,7 +4,7 @@ The original render is kept as <key>.stylized.orig.png and every recolor starts 
 rerunning never compounds the shift. The base sprite is re-pixelated and Resonant/Aberrant are
 redrawn from the recolored base so all three forms match.
 
-    .venv/bin/python scripts/recolor.py [NAME ...]
+    .venv/bin/python -m scripts.recolor [NAME ...]
 """
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from pixelate import pixelate_file
-from run_pipeline import ASSETS_FINAL, ASSETS_TEMP, ROOT, VARIANT_PROMPTS, run_pass1
+from scripts.pixelate import pixelate_file
+from scripts.run_pipeline import ASSETS_FINAL, ASSETS_TEMP, ROOT, VARIANT_PROMPTS, run_pass1
 
 
 def recolors() -> dict[str, tuple[float, float, float]]:
