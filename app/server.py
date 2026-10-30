@@ -22,7 +22,7 @@ import uuid
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, urlsplit
 
 import audio_jobs
 import pipeline
@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 DIST = (HERE.parent / "web" / "dist").resolve()
 JOBS = pipeline.JOBS
 HOST = "127.0.0.1"
+LOCAL_NAMES = {"127.0.0.1", "localhost", "::1"}
 SAFE_ID = re.compile(r"^[0-9a-f]{16}$")
 FILES = {
     "reference.png": "image/png",
@@ -361,11 +362,33 @@ def latest_job_id() -> str | None:
     return max(found)[1]
 
 
+def _local_name(value: str | None, url: bool = False) -> bool:
+    """True when a Host header, or an Origin with url=True, points at this machine."""
+    if not value:
+        return False
+    try:
+        name = urlsplit(value if url else "//" + value).hostname
+    except ValueError:
+        return False
+    return name in LOCAL_NAMES
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"[{self.address_string()}] {fmt % args}", flush=True)
+
+    def parse_request(self) -> bool:
+        """Refuse a request that names another host. Blocks DNS rebinding and cross-site posts."""
+        if not super().parse_request():
+            return False
+        origin = self.headers.get("Origin")
+        if _local_name(self.headers.get("Host")) and (origin is None or _local_name(origin, url=True)):
+            return True
+        self.close_connection = True
+        self.send_error(403, "local requests only")
+        return False
 
     def _json(self, code: int, payload: dict) -> None:
         body = json.dumps(payload).encode()
