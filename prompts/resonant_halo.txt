@@ -1,0 +1,9 @@
+# Slugs whose Resonant form keeps a halo (rare on purpose): Istaring, Orbmanta, Jadeverne, Solunara, Neurangel, Aurumwyrm, Ossiluxe, Mandalorb
+0110_istaring
+0429_orbmanta
+0431_jadeverne
+0434_solunara
+0436_neurangel
+0439_aurumwyrm
+0441_ossiluxe
+0442_mandalorb

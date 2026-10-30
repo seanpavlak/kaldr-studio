@@ -1,0 +1,60 @@
+Kaldr Studio
+Copyright 2026 Kaldr Industries LLC
+
+This software is licensed under the Functional Source License, Version 1.1,
+ALv2 Future License (FSL-1.1-ALv2). See LICENSE.md.
+
+"Kaldr", "Kaldr Studio", "Kaldr Studio Cloud", "Kaldr Industries", "Gant",
+"Keepers", the Blobert character and the Kaldr logos are trademarks of
+Kaldr Industries LLC. The license does not grant rights to them. See
+TRADEMARKS.md.
+
+-------------------------------------------------------------------------------
+Third-party software
+-------------------------------------------------------------------------------
+
+Kaldr Studio uses the following software. None of it is included in this
+repository; it is installed separately and stays under its own license.
+
+Python
+  Pillow          MIT-CMU
+  NumPy           BSD-3-Clause
+  SciPy           BSD-3-Clause
+  certifi         MPL-2.0
+  jsonschema      MIT
+  rembg           MIT
+  ONNX Runtime    MIT
+  mflux           MIT
+  Demucs          MIT
+  librosa         ISC
+  soundfile       BSD-3-Clause
+  PyTorch         BSD-3-Clause, Apache-2.0 and others
+  yt-dlp          Unlicense
+
+JavaScript
+  React           MIT
+  Framer Motion   MIT
+  Lucide          ISC
+  Sonner          MIT
+  thinking-orbs   MIT
+  Vite            MIT
+  Tailwind CSS    MIT
+  TypeScript      Apache-2.0
+
+External tools
+  FFmpeg          LGPL-2.1 or GPL-2.0, depending on the build
+
+-------------------------------------------------------------------------------
+Models and services
+-------------------------------------------------------------------------------
+
+BRIA RMBG-2.0 (background removal, downloaded by rembg on first use) is
+licensed for non-commercial use only. Commercial use requires a license
+from BRIA AI.
+
+Image redraws are sent to OpenRouter and the model the user selects, under
+those providers' own terms. Users supply their own OpenRouter API key.
+
+Demucs model weights and FLUX.2 Klein weights (when run locally through
+mflux) are downloaded on first use and are subject to their publishers'
+licenses.
