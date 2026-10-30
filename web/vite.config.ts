@@ -22,6 +22,7 @@ export default defineConfig({
       '/models': 'http://127.0.0.1:8765',
       '/openrouter-key': 'http://127.0.0.1:8765',
       '/audio': 'http://127.0.0.1:8765',
+      '/api': 'http://127.0.0.1:8765',
     },
   },
   preview: {
@@ -33,6 +34,7 @@ export default defineConfig({
       '/models': 'http://127.0.0.1:8765',
       '/openrouter-key': 'http://127.0.0.1:8765',
       '/audio': 'http://127.0.0.1:8765',
+      '/api': 'http://127.0.0.1:8765',
     },
   },
 })

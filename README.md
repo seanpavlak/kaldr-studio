@@ -59,6 +59,73 @@ The server listens on `127.0.0.1` only, so nothing outside this machine can reac
 
 To work on the interface, run `npm run dev` in `web/` alongside the server. Vite serves the UI on port 5173 and forwards API calls to port 8765.
 
+## API
+
+Each generator has one route that takes everything the studio sends. Post `multipart/form-data`, or `application/json` when there is no file. Leave a setting out to use the studio's default. A field the route does not know is an error, so a typo does not go unnoticed. Errors come back as `{"error": "..."}` with status 400.
+
+The server only answers requests addressed to `127.0.0.1` or `localhost`.
+
+### `POST /api/v1/sprite`
+
+Send `file` (an image, up to 20 MB) or `url`. Returns `202` with the job. Poll `GET /jobs/<id>` until `status` is `done` or `error`, then fetch the files it lists or `GET /jobs/<id>/sprite.zip`. Each sprite is a redraw charged to your OpenRouter key.
+
+| Field | Values | Default |
+|---|---|---|
+| `model` | an `id` from `GET /models` | FLUX.2 Klein 4B |
+| `canvas` | `32`, `48` or `64` | `48` |
+| `palette_colors` | 4 to 24 | `14` |
+| `saturation` | 0.5 to 2 | `1.25` |
+| `contrast` | 0.5 to 2 | `1.1` |
+| `coverage` | 0.05 to 0.8 | `0.35` |
+| `dark_bias` | 0 to 6 | `3` |
+| `outline` | `true` or `false` | `true` |
+| `sticker` | `true` or `false` | `false` |
+
+```bash
+curl -F file=@cat.png -F canvas=64 -F outline=false http://127.0.0.1:8765/api/v1/sprite
+```
+
+### `POST /api/v1/loop`
+
+Send `file` (audio or video, up to 80 MB) or `url`, and `rights=true` to confirm you own the recording or have permission to use it. Returns `202` with the job. Poll `GET /audio/score/<id>` until `status` is `done` or `error`, then fetch the files it lists.
+
+| Field | Values | Default |
+|---|---|---|
+| `style` | `soft` or `gb` | `soft` |
+| `classic` | `true` or `false` | `false` |
+| `lead` | `vocal-melody`, `instrument` or `none` | `vocal-melody` |
+| `min_seconds` | 8 to 180, no more than `max_seconds` | `40` |
+| `max_seconds` | 8 to 240 | `90` |
+| `start_after` | 0 to 600 | `0` |
+| `space` | 0 to 2.5 | `1` |
+| `brightness` | 0.35 to 2 | `1` |
+| `lead_level`, `chords_level`, `bass_level`, `drums_level` | 0 to 2.5 | `1` |
+
+```bash
+curl -F file=@song.mp3 -F rights=true -F style=gb http://127.0.0.1:8765/api/v1/loop
+```
+
+### `POST /api/v1/speech`
+
+Send `text`, up to 600 characters. Returns `200` with a WAV file.
+
+| Field | Values | Default |
+|---|---|---|
+| `pitch` | 80 to 800 | `300` |
+| `speed` | 4 to 40 | `16` |
+| `variation` | 0 to 12 | `3` |
+| `length` | 0.2 to 3 | `1` |
+| `drop` | 0 to 6 | `1` |
+| `pauses` | 0 to 4 | `1` |
+| `brightness` | 400 to 16000 | `6000` |
+| `lift` | 0 to 6 | `1` |
+| `tone` | 0.05 to 0.9 | `0.5` |
+| `seed` | a whole number from 0 to 2000000000, for the same audio every time | random |
+
+```bash
+curl -F text="Want to buy something?" -F pitch=440 -F seed=7 -o line.wav http://127.0.0.1:8765/api/v1/speech
+```
+
 ## Where your data goes
 
 | What | Where it goes |
