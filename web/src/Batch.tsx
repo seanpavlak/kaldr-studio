@@ -10,8 +10,9 @@ import { budgetAllows, money } from './money.ts'
 import { CongaScene } from './pixel.tsx'
 import { ModelField, SpriteFields } from './sprite-controls.tsx'
 import { StudioHeader } from './switch.tsx'
+import { useSavedSettings } from './settings.ts'
 import { useOnDone, useSubmitShortcut } from './hooks.ts'
-import { DEFAULT_RENDER, FALLBACK_MODEL, type Batch, type Job, type RenderSettings, type StudioModel } from './types.ts'
+import { DEFAULT_RENDER, FALLBACK_MODEL, type Batch, type Job, type RenderSettings, type StudioModel, type SavedSprite } from './types.ts'
 import { DropVeil, PayModal, Shortcut, Toasts } from './ui.tsx'
 
 const MAX_BATCH = 20
@@ -47,6 +48,10 @@ export default function BatchApp() {
   const formRef = useRef<HTMLFormElement>(null)
   const stageRef = useRef<HTMLElement>(null)
   useSubmitShortcut(formRef)
+  useSavedSettings<SavedSprite>('sprite', { model, ...render }, ({ model: savedModel, ...savedRender }) => {
+    setRender(savedRender)
+    setModel(savedModel)
+  })
   const [batch, setBatch] = useState<Batch | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [confirming, setConfirming] = useState<null | 'batch' | string>(null)

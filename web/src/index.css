@@ -1600,7 +1600,7 @@ figure.is-working .step { border-color: var(--accent); color: var(--accent); ani
 .mixer-body {
   position: relative;
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   column-gap: 8px;
   row-gap: 4px;
   align-items: center;
@@ -1631,32 +1631,53 @@ figure.is-working .step { border-color: var(--accent); color: var(--accent); ani
 .lane {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   column-gap: 8px;
   align-items: center;
   transition: opacity .25s;
 }
 
-.lane > button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--muted);
+.lane.off .lane-wave { filter: grayscale(1) brightness(.6); opacity: .5; }
+.lane.off .lane-name { color: var(--faint); }
+
+.lane-strip { display: grid; gap: 4px; min-width: 0; }
+
+.lane-head { display: flex; align-items: center; gap: 3px; min-width: 0; }
+
+.lane-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
   font-size: 11px;
   letter-spacing: .09em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
-  text-align: left;
-  cursor: pointer;
-  transition: color .15s, transform .2s var(--spring);
+  white-space: nowrap;
+  transition: color .15s;
 }
 
-.lane > button:hover { color: var(--accent-2); transform: translateX(2px); }
+.lane-toggle {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+}
 
-.mixer:not(.solo) .lane > button { color: var(--ink); }
-.mixer.solo .lane:not(.on) { opacity: .32; }
-.mixer.solo .lane:not(.on) .lane-wave { filter: grayscale(1) brightness(.72); }
-.mixer.solo .lane.on > button { color: var(--accent-2); }
-.mixer.solo .lane.on .lane-wave { outline: 1px solid var(--accent); }
+.lane-toggle:hover { border-color: var(--accent); color: var(--accent-2); }
+.lane-toggle[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+
+.lane-strip input.lane-fader { width: 100%; margin: 0; }
+
+.mixer-actions { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
 
 .lane-wave {
   position: relative;
@@ -1676,15 +1697,13 @@ figure.is-working .step { border-color: var(--accent); color: var(--accent); ani
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 96px;
+  left: 120px;
   width: 2px;
   margin-left: -1px;
   background: var(--ink);
   box-shadow: 0 0 8px rgba(244, 240, 232, .6);
   pointer-events: none;
 }
-
-.mixer audio { display: none; }
 
 .music-well > .ghost,
 .music-well > .make,

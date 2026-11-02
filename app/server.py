@@ -9,7 +9,8 @@ Listens on 127.0.0.1 only. Sprite redraws and loops share one lock,
 because both are heavy on this Mac. Beep speech does not take that lock.
 
 Routes live in route groups: routes_sprite (the studio's sprite page),
-routes_audio (its music page) and routes_api (the public /api/v1).
+routes_audio (its music page), routes_settings (the settings file they
+share) and routes_api (the public /api/v1).
 """
 
 from __future__ import annotations
@@ -21,20 +22,21 @@ from urllib.parse import urlparse
 from app.http_base import DIST, HOST, STATIC_TYPES, UI_MISSING, static_file
 from app.routes_api import ApiRoutes
 from app.routes_audio import AudioRoutes
+from app.routes_settings import SettingsRoutes
 from app.routes_sprite import SpriteRoutes
 from app.sprite_jobs import JOBS
 
 PAGES = {"/terms", "/privacy", "/batch", "/music", "/music/speech", "/music/batch", "/3d", "/3d/batch"}
 
 
-class Handler(ApiRoutes, AudioRoutes, SpriteRoutes):
+class Handler(ApiRoutes, AudioRoutes, SettingsRoutes, SpriteRoutes):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         parts = [p for p in path.split("/") if p]
         if parts and parts[0] == "audio":
             self._audio_get(parts)
             return
-        if self.sprite_get(path, parts):
+        if self.settings_get(path) or self.sprite_get(path, parts):
             return
         if path in PAGES and (DIST / "index.html").is_file():
             self._bytes(200, (DIST / "index.html").read_bytes(), "text/html; charset=utf-8", "no-cache")
@@ -61,7 +63,8 @@ class Handler(ApiRoutes, AudioRoutes, SpriteRoutes):
         self._json(404, {"error": "not found"})
 
     def do_PUT(self) -> None:  # noqa: N802
-        if not self.key_put(urlparse(self.path).path):
+        path = urlparse(self.path).path
+        if not (self.settings_put(path) or self.key_put(path)):
             self._json(404, {"error": "not found"})
 
     def do_DELETE(self) -> None:  # noqa: N802

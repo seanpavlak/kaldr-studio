@@ -58,6 +58,7 @@ OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key"
 # Price is one redraw at the resolution this studio requests. "about" means
 # the provider bills tokens, so the charge moves a little with the picture.
 DEFAULT_MODEL = "black-forest-labs/flux.2-klein-4b"
+SETTINGS_NAME = "kaldr-settings.json"
 MODELS = (
     {"id": "black-forest-labs/flux.2-klein-4b", "label": "FLUX.2 Klein 4B", "price": "$0.014", "usd": 0.014, "estimate": False, "seed": True, "output_format": "png", "resolution": None},
     {"id": "black-forest-labs/flux-3-image-klein", "label": "FLUX.3 Klein", "price": "$0.009", "usd": 0.009, "estimate": False, "seed": False, "output_format": None, "resolution": "1K"},
@@ -92,14 +93,23 @@ def _model_spec(model_id: str) -> dict:
     return MODELS[0]
 
 
-def _key_path() -> Path:
-    support = Path.home() / "Library/Application Support"
-    folder = support / "kaldr-studio"
+def support_folder() -> Path:
+    folder = Path.home() / "Library/Application Support/kaldr-studio"
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(folder, 0o700)
+    return folder
+
+
+def settings_file(**sections: dict) -> str:
+    """The settings that made a package, in the same shape as the studio's own settings file."""
+    return json.dumps({"version": 1, **sections}, indent=2) + "\n"
+
+
+def _key_path() -> Path:
+    folder = support_folder()
     path = folder / "openrouter.key"
     # Earlier versions kept the key under the old name. Move it once, so nobody has to add it again.
-    legacy = support / "sprite-studio" / "openrouter.key"
+    legacy = folder.parent / "sprite-studio" / "openrouter.key"
     if not path.exists() and legacy.is_file() and not legacy.is_symlink():
         os.replace(legacy, path)
         os.chmod(path, 0o600)

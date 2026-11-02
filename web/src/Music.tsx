@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Dices, Download, FileAudio, Link2, ListMusic, Megaphone, Music, Pause, Play, X } from 'lucide-react'
+import { Dices, Download, FileAudio, Link2, ListMusic, Megaphone, Music, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThinkingOrb, type OrbState } from 'thinking-orbs'
 import { EmptyState } from './empty.tsx'
@@ -8,6 +8,8 @@ import { celebrate, sfx } from './fx.ts'
 import { BubbleScene, NapScene, ShelfScene, TapeScene } from './pixel.tsx'
 import { StudioHeader, type BuilderMode } from './switch.tsx'
 import { useSubmitShortcut } from './hooks.ts'
+import { TrackList, type LoopTrack, type Strips } from './Mixer.tsx'
+import { useSavedSettings } from './settings.ts'
 import { DropVeil, RangeField, Segment, Sheet, Shortcut, Toasts, Toggle } from './ui.tsx'
 
 const MAX_BATCH = 8
@@ -47,6 +49,7 @@ type SpeakSettings = {
 }
 
 type ScoreSettings = {
+  takes: number
   style: 'soft' | 'gb'
   classic: boolean
   lead: Lead
@@ -75,7 +78,9 @@ type ScoreInfo = {
   seconds: number
 }
 
-type LoopTrack = { id: string; label: string; wav: string }
+type TakeFiles = { wav: string | null; ogg: string | null; midi?: string | null; zip: string | null; tracks?: LoopTrack[] }
+
+type ScoreTake = { number: number; info: ScoreInfo; files: TakeFiles }
 
 type ScoreJob = {
   id: string
@@ -84,7 +89,8 @@ type ScoreJob = {
   stage: string
   error: string | null
   info: ScoreInfo | null
-  files: { wav: string | null; ogg: string | null; zip: string | null; tracks?: LoopTrack[] }
+  files: TakeFiles
+  takes?: ScoreTake[]
 }
 
 type Source =
@@ -121,10 +127,17 @@ const LINES = [
   'Ahem. AHEM. Thank you.',
 ]
 
+type SavedSpeech = Voice & { seed: number | null }
+
+function speakWithoutLine({ pitch, speed, variation, length, drop, pauses, brightness, lift, tone }: SpeakSettings): Voice {
+  return { pitch, speed, variation, length, drop, pauses, brightness, lift, tone }
+}
+
 function voiceOf(settings: SpeakSettings): string | null {
   return VOICES.find(({ voice }) => (Object.keys(voice) as (keyof Voice)[]).every((name) => voice[name] === settings[name]))?.id ?? null
 }
 const SCORE_DEFAULT: ScoreSettings = {
+  takes: 3,
   style: 'soft',
   classic: false,
   lead: 'vocal-melody',
@@ -202,6 +215,12 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
   const alive = useRef(true)
   const clipRef = useRef<string | null>(null)
   useSubmitShortcut(formRef)
+  useSavedSettings<ScoreSettings>('loop', settings, setSettings)
+  useSavedSettings<SavedSpeech>(
+    'speech',
+    { ...speakWithoutLine(speak), seed: /^\d+$/.test(speak.seed.trim()) ? Number(speak.seed) : null },
+    (saved) => setSpeak((current) => ({ ...current, ...saved, seed: saved.seed === null ? '' : String(saved.seed) })),
+  )
   // Every new recording needs its own rights confirmation.
   const recordings = batch ? items.map((item) => item.key).join('|') : source?.kind === 'url' ? source.url : source ? `${source.file.name}:${source.file.size}` : ''
   const rights = recordings !== '' && rightsFor === recordings
@@ -735,6 +754,17 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
                       onChange={(style) => patchScore({ style })}
                     />
                   </div>
+                  <div className="field">
+                    <span className="kicker">Takes</span>
+                    <Segment
+                      label="Takes"
+                      options={[{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }] as const}
+                      value={settings.takes as 1 | 2 | 3}
+                      disabled={busy}
+                      onChange={(takes) => patchScore({ takes })}
+                    />
+                  </div>
+                  <p className="source-note">More takes try other sections of the song, best seam first. A song with fewer good sections returns fewer.</p>
                   <PickField
                     label="Lead"
                     value={settings.lead}
@@ -759,7 +789,7 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
                       <RangeField id="chords-level" label="Chords" value={settings.chords_level} reset={1} min={0} max={2} step={0.1} text={times(settings.chords_level)} disabled={busy} onChange={(value) => patchScore({ chords_level: value })} />
                       <RangeField id="bass-level" label="Bass" value={settings.bass_level} reset={1} min={0} max={2} step={0.1} text={times(settings.bass_level)} disabled={busy} onChange={(value) => patchScore({ bass_level: value })} />
                       <RangeField id="drums-level" label="Drums" value={settings.drums_level} reset={1} min={0} max={2} step={0.1} text={times(settings.drums_level)} disabled={busy} onChange={(value) => patchScore({ drums_level: value })} />
-                      <p className="source-note">Space is the room on Soft, and the echo on 8-bit. The levels sit on the usual mix. The loop already playing stays as it is.</p>
+                      <p className="source-note">Space is the room on Soft, and the echo on 8-bit. These levels set the starting mix for the next loop. Use the mixer to balance one you already made.</p>
                     </div>
                   </details>
                 </fieldset>
@@ -839,20 +869,13 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
                 </div>
               ) : job?.files.wav && (
                 <>
-                  {job.status === 'done' && (
-                    <div className="piece reveal">
-                      <p>{job.name}</p>
-                      {job.info && <p className="score-meta">{scoreLine(job.info)}</p>}
-                    </div>
-                  )}
-                  <TrackList mix={job.files.wav} tracks={job.files.tracks ?? []} autoPlay />
+                  <div className="piece reveal">
+                    <p>{job.name}</p>
+                  </div>
+                  <TakeView key={job.id} job={job} />
                 </>
               )}
               {job?.status === 'error' && <p className="is-error">{job.error || 'The loop failed.'}</p>}
-              {job?.files.tracks && job.files.tracks.length > 0 && (
-                <p className="source-note">Each part lines up with the loop. The package is those parts plus the finished mix, ready for a studio.</p>
-              )}
-              {job?.files.zip && <a className="make shine download" href={job.files.zip} download><Download aria-hidden="true" /> Download package</a>}
             </div>
           )}
           {batch && !started && (
@@ -892,14 +915,12 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
                       <p className="queue-name">{row?.name || item.name}</p>
                       {row?.status === 'running' && <p className="source-note">{stageText(row.stage)}</p>}
                       {row?.status === 'error' && <p className="is-error">{row.error || 'The loop failed.'}</p>}
-                      {row?.status === 'done' && row.info && <p className="source-note">{scoreLine(row.info)}</p>}
-                      {row?.files.wav && <TrackList mix={row.files.wav} tracks={row.files.tracks ?? []} />}
-                      <div className="result-actions">
-                        {row?.status === 'error' && (
+                      {row?.status === 'done' && <TakeView key={row.id} job={row} batch />}
+                      {row?.status === 'error' && (
+                        <div className="result-actions">
                           <button type="button" className="ghost" disabled={busy} onClick={() => void retry(item)}>Retry</button>
-                        )}
-                        {row?.files.zip && <a className="ghost with-icon" href={row.files.zip} download><Download aria-hidden="true" /> Download</a>}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </motion.li>
                 )
@@ -961,301 +982,53 @@ export default function MusicApp({ mode }: { mode: BuilderMode | 'speech' }) {
   )
 }
 
-type Peaks = { min: Float32Array; max: Float32Array; duration: number }
-
-const WAVE_BINS = 480
-
 function times(value: number) {
   return `${value.toFixed(1)}×`
 }
 
-function clock(seconds: number) {
-  const whole = Math.max(0, Math.floor(seconds))
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
-}
-
-function peaksFrom(buffer: AudioBuffer, bins: number): Peaks {
-  const data = buffer.getChannelData(0)
-  const min = new Float32Array(bins)
-  const max = new Float32Array(bins)
-  const size = Math.max(1, Math.floor(data.length / bins))
-  for (let i = 0; i < bins; i++) {
-    let lo = 0
-    let hi = 0
-    const start = i * size
-    const end = Math.min(data.length, start + size)
-    for (let j = start; j < end; j++) {
-      const sample = data[j]
-      if (sample < lo) lo = sample
-      if (sample > hi) hi = sample
-    }
-    min[i] = lo
-    max[i] = hi
-  }
-  return { min, max, duration: buffer.duration }
-}
-
-function drawWave(canvas: HTMLCanvasElement, peaks: Peaks | undefined, color: string) {
-  const width = canvas.clientWidth
-  const height = canvas.clientHeight
-  if (!width || !height) return
-  const ratio = window.devicePixelRatio || 1
-  canvas.width = Math.floor(width * ratio)
-  canvas.height = Math.floor(height * ratio)
-  const pen = canvas.getContext('2d')
-  if (!pen) return
-  pen.setTransform(ratio, 0, 0, ratio, 0, 0)
-  pen.clearRect(0, 0, width, height)
-  const mid = height / 2
-  pen.fillStyle = color
-  if (!peaks) {
-    pen.fillRect(0, mid, width, 1)
-    return
-  }
-  const bar = width / peaks.min.length
-  for (let i = 0; i < peaks.min.length; i++) {
-    const top = mid + peaks.min[i] * height * 0.46
-    const bottom = mid + peaks.max[i] * height * 0.46
-    const y = Math.min(top, bottom)
-    pen.fillRect(i * bar, y, Math.max(bar - 0.35, 0.6), Math.max(1, Math.abs(bottom - top)))
-  }
-}
-
-function TrackList({ mix, tracks, autoPlay = false }: { mix: string; tracks: LoopTrack[]; autoPlay?: boolean }) {
-  const lanes = [{ id: 'mix', label: 'Loop', wav: mix }, ...tracks]
-  const laneKey = lanes.map((lane) => lane.wav).join('|')
-  const [peaks, setPeaks] = useState<Record<string, Peaks>>({})
-  const [active, setActive] = useState('mix')
-  const [playing, setPlaying] = useState(false)
-  const [duration, setDuration] = useState(0)
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const headRef = useRef<HTMLDivElement>(null)
-  const clockRef = useRef<HTMLSpanElement>(null)
-  const waveRef = useRef<HTMLDivElement>(null)
-  const playOnLoad = useRef(autoPlay)
-  const place = useRef(0)
-  const pending = useRef(false)
-  const seekTries = useRef(0)
-  const dragging = useRef(false)
-
-  function moveTo(node: HTMLAudioElement, seconds: number) {
-    if (!pending.current || node.seeking || !Number.isFinite(node.duration) || node.duration <= 0) return
-    const next = Math.min(seconds, Math.max(0, node.duration - 0.05))
-    if (Math.abs(node.currentTime - next) < 0.3) {
-      pending.current = false
-      return
-    }
-    if (seekTries.current >= 4) {
-      pending.current = false
-      return
-    }
-    seekTries.current += 1
-    node.currentTime = next
-  }
-
-  useEffect(() => {
-    const ctrl = new AbortController()
-    let gone = false
-    const ctx = new AudioContext()
-    const found: Record<string, Peaks> = {}
-    void Promise.all(lanes.map(async (lane) => {
-      try {
-        const res = await fetch(lane.wav, { signal: ctrl.signal })
-        if (!res.ok) return
-        const audio = await ctx.decodeAudioData((await res.arrayBuffer()).slice(0))
-        if (!gone) found[lane.id] = peaksFrom(audio, WAVE_BINS)
-      } catch {
-        // A missing part still leaves its lane.
-      }
-    })).then(() => {
-      if (gone) return
-      setPeaks({ ...found })
-      if (found.mix) setDuration(found.mix.duration)
-      void ctx.close().catch(() => {})
-    })
-    return () => {
-      gone = true
-      ctrl.abort()
-      void ctx.close().catch(() => {})
-    }
-    // laneKey already covers the wav addresses this effect loads.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [laneKey])
-
-  useEffect(() => {
-    const root = rootRef.current
-    if (!root) return
-    const draw = () => {
-      root.querySelectorAll<HTMLCanvasElement>('canvas[data-lane]').forEach((canvas) => {
-        const id = canvas.dataset.lane || ''
-        drawWave(canvas, peaks[id], id === 'mix' ? '#e4a15a' : '#7d6a55')
-      })
-    }
-    draw()
-    const observer = new ResizeObserver(draw)
-    observer.observe(root)
-    return () => observer.disconnect()
-  }, [peaks, laneKey])
-
-  useEffect(() => {
-    const el = audioRef.current
-    if (!el) return
-    const play = playOnLoad.current
-    playOnLoad.current = false
-    if (!el.seeking && el.currentTime > 0) place.current = el.currentTime
-    if (place.current > 0.05) pending.current = true
-    let start = play
-    const onReady = () => {
-      if (Number.isFinite(el.duration)) setDuration(el.duration)
-      moveTo(el, place.current)
-      if (start) {
-        start = false
-        void el.play().catch(() => setPlaying(false))
-      }
-    }
-    const onSeeked = () => {
-      if (!pending.current) return
-      if (Math.abs(el.currentTime - place.current) < 0.35) pending.current = false
-      else moveTo(el, place.current)
-    }
-    el.addEventListener('loadedmetadata', onReady)
-    el.addEventListener('canplay', onReady)
-    el.addEventListener('progress', onReady)
-    el.addEventListener('seeked', onSeeked)
-    el.src = lanes.find((lane) => lane.id === active)?.wav || mix
-    return () => {
-      el.removeEventListener('loadedmetadata', onReady)
-      el.removeEventListener('canplay', onReady)
-      el.removeEventListener('progress', onReady)
-      el.removeEventListener('seeked', onSeeked)
-    }
-    // laneKey already covers the wav addresses this effect reads from lanes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, laneKey, mix])
-
-  useEffect(() => {
-    let frame = 0
-    const tick = () => {
-      const el = audioRef.current
-      const wave = waveRef.current
-      const head = headRef.current
-      const total = el && Number.isFinite(el.duration) ? el.duration : duration
-      const now = dragging.current ? place.current : (el?.currentTime || 0)
-      if (wave && head && total > 0) head.style.left = `${wave.offsetLeft + (now / total) * wave.clientWidth}px`
-      if (clockRef.current) clockRef.current.textContent = total ? `${clock(now)} / ${clock(total)}` : '0:00'
-      frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [duration])
-
-  function toggle() {
-    const el = audioRef.current
-    if (!el) return
-    if (el.paused) void el.play().catch(() => setPlaying(false))
-    else el.pause()
-  }
-
-  function choose(id: string) {
-    if (id === active) {
-      toggle()
-      return
-    }
-    playOnLoad.current = true
-    setActive(id)
-  }
-
-  function scrub(clientX: number, rect: DOMRect, force: boolean) {
-    const el = audioRef.current
-    if (!el || rect.width <= 0) return
-    const known = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : duration
-    if (known <= 0) return
-    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-    const next = Math.min(Math.max(0, known - 0.05), ratio * known)
-    place.current = next
-    const wave = waveRef.current
-    const head = headRef.current
-    if (wave && head) head.style.left = `${wave.offsetLeft + ratio * wave.clientWidth}px`
-    if (clockRef.current) clockRef.current.textContent = `${clock(next)} / ${clock(known)}`
-    if (!force && el.seeking) return
-    pending.current = true
-    seekTries.current = 0
-    moveTo(el, next)
-  }
-
-  function beginScrub(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || dragging.current) return
-    const target = event.currentTarget
-    const rect = target.getBoundingClientRect()
-    if (rect.width <= 0) return
-    dragging.current = true
-    try { target.setPointerCapture(event.pointerId) } catch { /* the window listeners still follow the pointer */ }
-    scrub(event.clientX, rect, true)
-    const pointerId = event.pointerId
-    const move = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return
-      scrub(ev.clientX, target.getBoundingClientRect(), false)
-    }
-    const finish = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', finish)
-      window.removeEventListener('pointercancel', finish)
-      scrub(ev.clientX, target.getBoundingClientRect(), true)
-      dragging.current = false
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', finish)
-    window.addEventListener('pointercancel', finish)
-  }
-
-  const step = duration > 60 ? 10 : duration > 20 ? 5 : 2
-  const ruler = duration > 0 ? Array.from({ length: Math.floor(duration / step) + 1 }, (_, i) => i * step) : []
-
-  const solo = active !== 'mix'
-
+function TakeView({ job, batch = false }: { job: ScoreJob; batch?: boolean }) {
+  const [number, setNumber] = useState(1)
+  const [switched, setSwitched] = useState(false)
+  const [strips, setStrips] = useState<Strips>({})
+  const takes = job.takes ?? []
+  const take = takes.find((item) => item.number === number) ?? takes[0]
+  const files = take?.files ?? job.files
+  const info = take?.info ?? job.info
+  if (!files.wav) return null
+  const download = files.zip && (
+    <a className={batch ? 'ghost with-icon' : 'make shine download'} href={files.zip} download>
+      <Download aria-hidden="true" /> {batch ? 'Download' : 'Download package'}
+    </a>
+  )
   return (
-    <div className={solo ? 'mixer solo' : 'mixer'} ref={rootRef}>
-      <div className="mixer-transport">
-        <button type="button" className={playing ? 'play on' : 'play'} onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
-          {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-        </button>
-        <span ref={clockRef}>0:00</span>
-        <span className={playing ? 'eq on' : 'eq'} aria-hidden="true"><i /><i /><i /><i /></span>
-      </div>
-      <div className="mixer-body">
-        <div className="mixer-ruler" aria-hidden="true" onPointerDown={beginScrub}>
-          {ruler.map((mark) => (
-            <span key={mark} style={{ left: `${(mark / duration) * 100}%` }}>{clock(mark)}</span>
-          ))}
-        </div>
-        {lanes.map((lane) => (
-          <div className={solo && lane.id === active ? 'lane on' : 'lane'} key={lane.id}>
-            <button type="button" onClick={() => choose(lane.id)} aria-pressed={lane.id === active}>{lane.label}</button>
-            <div
-              className={lane.id === 'mix' ? 'lane-wave mix' : 'lane-wave'}
-              ref={lane.id === 'mix' ? waveRef : undefined}
-              role="slider"
-              aria-label={`${lane.label} waveform`}
-              aria-valuemin={0}
-              aria-valuemax={Math.round(duration)}
-              onPointerDown={beginScrub}
-            >
-              <canvas data-lane={lane.id} />
-            </div>
-          </div>
-        ))}
-        <div className="playhead" ref={headRef} />
-      </div>
-      <audio
-        ref={audioRef}
-        loop
-        preload="auto"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+    <>
+      {info && <p className={batch ? 'source-note' : 'score-meta'}>{scoreLine(info)}</p>}
+      {takes.length > 1 && (
+        <Segment
+          label="Take"
+          options={takes.map((item) => ({ value: item.number, label: `Take ${item.number}` }))}
+          value={take?.number ?? 1}
+          onChange={(next) => {
+            setNumber(next)
+            setSwitched(true)
+          }}
+        />
+      )}
+      <TrackList
+        key={files.wav}
+        mix={files.wav}
+        tracks={files.tracks ?? []}
+        name={take && take.number > 1 ? `${job.name}-take${take.number}` : job.name}
+        strips={strips}
+        onStrips={setStrips}
+        autoPlay={!batch || switched}
+        keep={!batch}
       />
-    </div>
+      {!batch && files.tracks && files.tracks.length > 0 && (
+        <p className="source-note">Each part lines up with the loop. The package is those parts, the notes as MIDI, the settings, and the finished mix, ready for a studio.</p>
+      )}
+      {batch ? <div className="result-actions">{download}</div> : download}
+    </>
   )
 }
 

@@ -8,8 +8,9 @@ import { KeyField, useKey } from './key.tsx'
 import { FrameScene } from './pixel.tsx'
 import { ModelField, SpriteFields } from './sprite-controls.tsx'
 import { StudioHeader } from './switch.tsx'
+import { useSavedSettings } from './settings.ts'
 import { useOnDone, useSubmitShortcut } from './hooks.ts'
-import { DEFAULT_RENDER, FALLBACK_MODEL, type IdleMeta, type Job, type RenderSettings, type StudioModel } from './types.ts'
+import { DEFAULT_RENDER, FALLBACK_MODEL, type IdleMeta, type Job, type RenderSettings, type SavedSprite, type StudioModel } from './types.ts'
 import { DropVeil, PayModal, Sheet, Shortcut, Toasts } from './ui.tsx'
 
 const ORB_STATE: Record<string, OrbState> = {
@@ -182,6 +183,13 @@ export default function App() {
   const formRef = useRef<HTMLFormElement>(null)
   const spriteRef = useRef<HTMLDivElement>(null)
   useSubmitShortcut(formRef)
+  useSavedSettings<SavedSprite>('sprite', { model, ...render }, ({ model: savedModel, ...savedRender }) => {
+    setRender(savedRender)
+    if (savedModel !== FALLBACK_MODEL.id) {
+      setModel(savedModel)
+      modelTouched.current = true
+    }
+  })
 
   useEffect(() => {
     document.title = 'KALDR STUDIO'

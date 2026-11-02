@@ -4,7 +4,7 @@ Kaldr Studio turns pictures into game-ready pixel art and songs into game-ready 
 
 - **Sprite Builder.** Give it an image or an image URL. A model redraws it, then a deterministic pass reduces it to an exact 48×48 sprite with a clean palette and a 1px outline, and builds a looping idle animation.
 - **Sprite Batch.** Do the same for up to 20 images at once.
-- **Audio Builder.** Turn a recording into a seamless, vocal-free retro loop.
+- **Audio Builder.** Turn a recording into a seamless, vocal-free retro loop. Compare up to three takes from different sections of the song, balance the parts in a live mixer, and take the notes away as MIDI.
 - **Beep Speech.** Turn a line of text into chiptune babble for character dialogue.
 
 A hosted version, **Kaldr Studio Cloud**, is run by Kaldr Industries LLC. This repository is the self-hosted version.
@@ -90,8 +90,11 @@ curl -F file=@cat.png -F canvas=64 -F outline=false http://127.0.0.1:8765/api/v1
 
 Send `file` (audio or video, up to 80 MB) or `url`, and `rights=true` to confirm you own the recording or have permission to use it. Returns `202` with the job. Poll `GET /audio/score/<id>` until `status` is `done` or `error`, then fetch the files it lists.
 
+`takes` lists each loop, best seam first, with its own `info` and `files`. Each take has a WAV and OGG, its parts, a MIDI file and a zip package. `files` at the top level is the first take. A song without enough other good sections returns fewer takes than you asked for. Each take adds to the job's render time and uses about 1 MB of disk per second of loop, so ask for `takes=1` when you only need the best seam.
+
 | Field | Values | Default |
 |---|---|---|
+| `takes` | 1 to 3 | `3` |
 | `style` | `soft` or `gb` | `soft` |
 | `classic` | `true` or `false` | `false` |
 | `lead` | `vocal-melody`, `instrument` or `none` | `vocal-melody` |
@@ -127,6 +130,21 @@ Send `text`, up to 600 characters. Returns `200` with a WAV file.
 curl -F text="Want to buy something?" -F pitch=440 -F seed=7 -o line.wav http://127.0.0.1:8765/api/v1/speech
 ```
 
+## Settings
+
+The studio remembers your settings for each builder in one file, `kaldr-settings.json`, and the button in the header downloads it. Each section uses the field names of its API route:
+
+```json
+{
+  "version": 1,
+  "sprite": { "model": "black-forest-labs/flux.2-klein-4b", "canvas": 48 },
+  "loop": { "takes": 3, "style": "soft" },
+  "speech": { "pitch": 300, "seed": null }
+}
+```
+
+The real file lists every setting. It never holds your OpenRouter key or the text of a line. `GET /settings` reads it, `PUT /settings` changes the sections you send, and `GET /settings/kaldr-settings.json` downloads it. Every downloaded sprite or loop package also carries a copy with the settings that made it.
+
 ## Where your data goes
 
 | What | Where it goes |
@@ -135,6 +153,7 @@ curl -F text="Want to buy something?" -F pitch=440 -F seed=7 -o line.wav http://
 | Audio and text | Nowhere. Loops and beep speech are made on this machine |
 | Jobs and outputs | `studio_jobs/` in this folder |
 | Your OpenRouter key | `~/Library/Application Support/kaldr-studio/openrouter.key` |
+| Your settings | `~/Library/Application Support/kaldr-studio/kaldr-settings.json` |
 
 Kaldr Industries LLC receives nothing from a self-hosted copy.
 
@@ -158,7 +177,7 @@ The Audio Builder can download audio from a URL with `yt-dlp`. Only use it on re
 
 | Path | What it holds |
 |---|---|
-| `app/` | The local server (`server.py`, with routes in `routes_*.py`), sprite pipeline and jobs, and audio jobs |
+| `app/` | The local server (`server.py`, with routes in `routes_*.py`), sprite pipeline and jobs, audio jobs, and shared settings |
 | `web/` | The studio interface (React, Vite) |
 | `scripts/` | Command-line sprite pipeline: redraw, pixelate, recolor, animate |
 | `prompts/` | Prompts for the redraw models |

@@ -35,6 +35,9 @@ TRACKS = (
     ("noise", "Noise"),
 )
 TRACK_FILES = {f"{stem_id}.wav" for stem_id, _label in TRACKS}
+MAX_TAKES = 3
+# Take 1 sits at the top of the job folder. Later takes carry a prefix on the same names.
+TAKE_FILE = re.compile(r"(?:take([2-9])-)?([^/]+)")
 
 
 RIGHTS_ERROR = "confirm you own this recording or have permission to use it"
@@ -67,7 +70,11 @@ def parse_settings(raw) -> dict:
     start_after = number("start_after", 0, 0, 600)
     if min_seconds > max_seconds:
         raise ValueError("the shortest loop cannot be longer than the longest")
+    takes = number("takes", MAX_TAKES, 1, MAX_TAKES)
+    if takes != int(takes):
+        raise ValueError("takes must be a whole number")
     return {
+        "takes": int(takes),
         "style": style,
         "classic": bool(raw.get("classic", False)),
         "lead": lead,
@@ -184,21 +191,38 @@ def view(job_id: str) -> dict | None:
     data = _read(job_id)
     if data is None:
         return None
-    folder = _folder(job_id)
-    base = f"/audio/score/{job_id}"
-    tracks = [
-        {"id": stem_id, "label": label, "wav": f"{base}/{stem_id}.wav"}
-        for stem_id, label in TRACKS
-        if (folder / f"{stem_id}.wav").is_file()
+    data["files"] = _take_files(job_id, "")
+    # A job made before takes existed has only its one loop.
+    infos = data.pop("take_info", None) or ([data["info"]] if data.get("info") else [])
+    data["takes"] = [
+        {"number": number, "info": info, "files": _take_files(job_id, _take_prefix(number))}
+        for number, info in enumerate(infos, start=1)
     ]
-    ready = (folder / "loop.wav").is_file() and (folder / "loop.ogg").is_file()
-    data["files"] = {
-        "wav": f"{base}/loop.wav" if (folder / "loop.wav").is_file() else None,
-        "ogg": f"{base}/loop.ogg" if (folder / "loop.ogg").is_file() else None,
-        "zip": f"{base}/score.zip" if ready else None,
-        "tracks": tracks,
-    }
     return data
+
+
+def _take_prefix(number: int) -> str:
+    return "" if number == 1 else f"take{number}-"
+
+
+def _take_files(job_id: str, prefix: str) -> dict:
+    folder = _folder(job_id)
+    base = f"/audio/score/{job_id}/{prefix}"
+
+    def there(name: str) -> str | None:
+        return f"{base}{name}" if (folder / f"{prefix}{name}").is_file() else None
+
+    return {
+        "wav": there("loop.wav"),
+        "ogg": there("loop.ogg"),
+        "midi": there("loop.mid"),
+        "zip": f"{base}score.zip" if there("loop.wav") and there("loop.ogg") else None,
+        "tracks": [
+            {"id": stem_id, "label": label, "wav": f"{base}{stem_id}.wav"}
+            for stem_id, label in TRACKS
+            if there(f"{stem_id}.wav")
+        ],
+    }
 
 
 def file_bytes(job_id: str, name: str) -> tuple[bytes, str, str | None] | None:
@@ -206,22 +230,28 @@ def file_bytes(job_id: str, name: str) -> tuple[bytes, str, str | None] | None:
     status = _read(job_id)
     if status is None or status.get("status") != "done":
         return None
-    download = _download_name(status.get("name") or "score")
-    if name == "loop.wav" and (folder / "loop.wav").is_file():
-        return (folder / "loop.wav").read_bytes(), "audio/wav", None
-    if name in TRACK_FILES and (folder / name).is_file():
+    matched = TAKE_FILE.fullmatch(name)
+    if matched is None:
+        return None
+    number, base = matched.groups()
+    prefix = f"take{number}-" if number else ""
+    download = _download_name(status.get("name") or "score") + (f"-take{number}" if number else "")
+    if base == "loop.wav" and (folder / name).is_file():
         return (folder / name).read_bytes(), "audio/wav", None
-    if name == "loop.ogg" and (folder / "loop.ogg").is_file():
-        return (folder / "loop.ogg").read_bytes(), "audio/ogg", None
-    if name == "score.zip" and (folder / "loop.wav").is_file() and (folder / "loop.ogg").is_file():
+    if base in TRACK_FILES and (folder / name).is_file():
+        return (folder / name).read_bytes(), "audio/wav", None
+    if base == "loop.ogg" and (folder / name).is_file():
+        return (folder / name).read_bytes(), "audio/ogg", None
+    if base == "loop.mid" and (folder / name).is_file():
+        return (folder / name).read_bytes(), "audio/midi", f"{download}.mid"
+    if base == "score.zip" and (folder / f"{prefix}loop.wav").is_file() and (folder / f"{prefix}loop.ogg").is_file():
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
-            archive.write(folder / "loop.wav", "loop.wav")
-            archive.write(folder / "loop.ogg", "loop.ogg")
-            for stem_id, _label in TRACKS:
-                stem = folder / f"{stem_id}.wav"
-                if stem.is_file():
-                    archive.write(stem, f"{stem_id}.wav")
+            for packed in ("loop.wav", "loop.ogg", "loop.mid", *(f"{stem_id}.wav" for stem_id, _label in TRACKS)):
+                path = folder / f"{prefix}{packed}"
+                if path.is_file():
+                    archive.write(path, packed)
+            archive.writestr(pipeline.SETTINGS_NAME, pipeline.settings_file(loop=status.get("settings") or {}))
         return buf.getvalue(), "application/zip", f"{download}.zip"
     return None
 
@@ -326,7 +356,7 @@ def _worker(job_id: str, url: str | None, source: Path | None, lock: threading.L
             else:
                 progress("separate")
                 stems = retro.separate(source)
-            audio, info, tracks = retro.render_loop(
+            takes = retro.render_takes(
                 stems,
                 style=settings["style"],
                 classic=settings["classic"],
@@ -340,20 +370,25 @@ def _worker(job_id: str, url: str | None, source: Path | None, lock: threading.L
                 chords_level=settings.get("chords_level", 1),
                 bass_level=settings.get("bass_level", 1),
                 drums_level=settings.get("drums_level", 1),
+                takes=settings.get("takes", 1),
                 progress=progress,
             )
             import soundfile as sf
-            sf.write(folder / "loop.wav", audio.T, retro.SR, subtype="PCM_16")
-            sf.write(folder / "loop.ogg", audio.T, retro.SR, format="OGG", subtype="VORBIS")
-            for stem_id, _label in TRACKS:
-                stem = tracks.get(stem_id)
-                if stem is not None:
-                    sf.write(folder / f"{stem_id}.wav", stem.T, retro.SR, subtype="PCM_16")
+            for number, take in enumerate(takes, start=1):
+                prefix = _take_prefix(number)
+                sf.write(folder / f"{prefix}loop.wav", take["audio"].T, retro.SR, subtype="PCM_16")
+                sf.write(folder / f"{prefix}loop.ogg", take["audio"].T, retro.SR, format="OGG", subtype="VORBIS")
+                (folder / f"{prefix}loop.mid").write_bytes(take["midi"])
+                for stem_id, _label in TRACKS:
+                    stem = take["tracks"].get(stem_id)
+                    if stem is not None:
+                        sf.write(folder / f"{prefix}{stem_id}.wav", stem.T, retro.SR, subtype="PCM_16")
             done = _read(job_id) or status
             done["status"] = "done"
             done["stage"] = "done"
             done["error"] = None
-            done["info"] = info
+            done["info"] = takes[0]["info"]
+            done["take_info"] = [take["info"] for take in takes]
             _save(folder, done)
     except Exception as exc:
         failed = _read(job_id) or {"id": job_id, "name": "score", "settings": {}, "info": None}

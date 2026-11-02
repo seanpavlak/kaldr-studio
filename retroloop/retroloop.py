@@ -434,9 +434,21 @@ def drum_hits(drums: np.ndarray, bounds: np.ndarray) -> np.ndarray:
 
 # ------------------------------------------------------------------ loop choice
 
-def choose_loop(features: np.ndarray, step_sec: float, min_sec: float, max_sec: float, first_step: int = 0):
-    """Find (start, end) steps, a whole number of bars apart, where the music after
-    `end` most resembles the music after `start` (so jumping end->start is invisible)."""
+TAKE_MARGIN = 0.1  # how far below the best seam another take may score
+TAKE_OVERLAP = 0.5  # how much of its length another take may share with an earlier one
+
+
+def _overlap(a: tuple, b: tuple) -> float:
+    shared = min(a[1], b[1]) - max(a[0], b[0])
+    return max(0, shared) / min(a[1] - a[0], b[1] - b[0])
+
+
+def choose_loops(features: np.ndarray, step_sec: float, min_sec: float, max_sec: float, first_step: int = 0, count: int = 1):
+    """Find (start, end, score) steps, a whole number of bars apart, where the music after
+    `end` most resembles the music after `start` (so jumping end->start is invisible).
+
+    The first is the best seam. The rest are other sections that nearly match it, so
+    a song with no other good section returns fewer than `count`."""
     f = features / (np.linalg.norm(features, axis=1, keepdims=True) + 1e-9)
     sim = f @ f.T
     n = len(f)
@@ -447,7 +459,7 @@ def choose_loop(features: np.ndarray, step_sec: float, min_sec: float, max_sec: 
     energy = np.linalg.norm(features, axis=1)
     loud = np.convolve(energy, np.ones(STEPS_PER_BAR), mode="same") > 0.5 * np.median(energy) * STEPS_PER_BAR
 
-    best = []
+    best, others = [], []
     for bars in range(min_bars, max_bars + 1):
         length = bars * STEPS_PER_BAR
         i = starts[starts + length + ahead <= n]
@@ -458,12 +470,20 @@ def choose_loop(features: np.ndarray, step_sec: float, min_sec: float, max_sec: 
         score[~loud[i]] = -1  # don't start in a quiet intro / break
         k = score.argmax()
         best.append((score[k], length, int(i[k]), int(j[k])))
+        if count > 1:
+            others += [(float(score[m]), int(i[m]), int(j[m])) for m in np.flatnonzero(score > -1)]
     if not best:
         raise LoopError("Track is too short for the requested loop length.")
     top = max(b[0] for b in best)
     # among near-best candidates, prefer the longest loop
     score, _, start, end = max((b for b in best if b[0] >= top - 0.02), key=lambda b: b[1])
-    return start, end, score
+    chosen = [(start, end, score)]
+    for other, a, b in sorted(others, key=lambda item: -item[0]):
+        if len(chosen) >= count or other < top - TAKE_MARGIN:
+            break
+        if all(_overlap((a, b), taken) < TAKE_OVERLAP for taken in chosen):
+            chosen.append((a, b, other))
+    return chosen
 
 
 # ------------------------------------------------------------------ 8-bit synth
@@ -574,6 +594,15 @@ def fill_gaps(seq, is_rest, max_steps=None):
     return out
 
 
+def held_parts(lead, chords, bass):
+    """The note lines as they are played, with short rests held over."""
+    return (
+        fill_gaps(lead, lambda m: m < 0, max_steps=4),
+        fill_gaps(chords, lambda c: not c),
+        fill_gaps(bass, lambda m: m < 0, max_steps=STEPS_PER_BAR // 2),
+    )
+
+
 def circular(b, a, x):
     """Filter a loop as if it repeats forever, so the filter state matches at the seam."""
     n = x.shape[1]
@@ -622,9 +651,7 @@ def render(
     lead_level: float = 1.0, chords_level: float = 1.0,
     bass_level: float = 1.0, drums_level: float = 1.0,
 ) -> tuple[np.ndarray, dict]:
-    lead = fill_gaps(lead, lambda m: m < 0, max_steps=4)
-    bass = fill_gaps(bass, lambda m: m < 0, max_steps=STEPS_PER_BAR // 2)
-    chords = fill_gaps(chords, lambda c: not c)
+    lead, chords, bass = held_parts(lead, chords, bass)
 
     n_steps = len(bass)
     length = n_steps * step_samples
@@ -778,22 +805,20 @@ def soft_drums():
 def room(loop, mix=0.18):
     """A small SNES-ish room: parallel feedback combs into allpasses, run circularly."""
     wet = np.zeros_like(loop)
+    n = loop.shape[1]
+    # These delays run to thousands of samples, far too slow to filter sample by sample.
+    # The loop repeats, so the same filters apply exactly in the frequency domain.
+    tone = 2j * np.pi * np.fft.rfftfreq(n)
     for ch in range(2):
-        x = loop[ch]
-        acc = np.zeros_like(x)
-        for ms in (29.7, 37.1, 41.1, 43.7):
-            d = int(ms * SR / 1000) + ch * 7
-            a = np.zeros(d + 1)
-            a[0], a[d] = 1.0, -0.72
-            acc += circular(np.array([1.0]), a, x[None])[0]
+        combs = sum(
+            1 / (1 - 0.72 * np.exp(-tone * (int(ms * SR / 1000) + ch * 7)))
+            for ms in (29.7, 37.1, 41.1, 43.7)
+        )
+        allpasses = 1.0
         for ms in (5.0, 1.7):
-            d = int(ms * SR / 1000)
-            b = np.zeros(d + 1)
-            a = np.zeros(d + 1)
-            b[0], b[d] = -0.6, 1.0
-            a[0], a[d] = 1.0, -0.6
-            acc = circular(b, a, acc[None])[0]
-        wet[ch] = acc / 4
+            delayed = np.exp(-tone * int(ms * SR / 1000))
+            allpasses = allpasses * (delayed - 0.6) / (1 - 0.6 * delayed)
+        wet[ch] = np.fft.irfft(np.fft.rfft(loop[ch]) * combs * allpasses, n) / 4
     wet = circular(*butter(1, 3500, btype="low", fs=SR), wet)
     return loop + mix * wet
 
@@ -804,9 +829,7 @@ def render_soft(
     lead_level: float = 1.0, chords_level: float = 1.0,
     bass_level: float = 1.0, drums_level: float = 1.0,
 ) -> tuple[np.ndarray, dict]:
-    lead = fill_gaps(lead, lambda m: m < 0, max_steps=4)
-    bass = fill_gaps(bass, lambda m: m < 0, max_steps=STEPS_PER_BAR // 2)
-    chords = fill_gaps(chords, lambda c: not c)
+    lead, chords, bass = held_parts(lead, chords, bass)
 
     n_steps = len(bass)
     length = n_steps * step_samples
@@ -864,9 +887,53 @@ def render_soft(
     return _deliver(loop, stems, polish)
 
 
+# ------------------------------------------------------------------ MIDI
+
+MIDI_TICKS_PER_STEP = 120
+MIDI_DRUMS = {1: 42, 2: 38, 3: 36}  # General MIDI: closed hat, snare, kick
+
+
+def _vlq(value: int) -> bytes:
+    out = [value & 0x7F]
+    while value := value >> 7:
+        out.insert(0, 0x80 | (value & 0x7F))
+    return bytes(out)
+
+
+def _midi_track(name: str, channel: int, notes: list, lead_in: bytes = b"") -> bytes:
+    """`notes` are (start step, length in steps, note number)."""
+    events = []
+    for start, length, note in notes:
+        events.append((start * MIDI_TICKS_PER_STEP, 1, bytes([0x90 | channel, note, 96])))
+        events.append(((start + length) * MIDI_TICKS_PER_STEP, 0, bytes([0x80 | channel, note, 0])))
+    label = name.encode()
+    body = bytearray(lead_in + b"\x00\xff\x03" + _vlq(len(label)) + label)
+    now = 0
+    for tick, _order, message in sorted(events, key=lambda event: event[:2]):
+        body += _vlq(tick - now) + message
+        now = tick
+    body += b"\x00\xff\x2f\x00"
+    return b"MTrk" + len(body).to_bytes(4, "big") + bytes(body)
+
+
+def midi_bytes(lead, chords, bass, hits, step_sec: float) -> bytes:
+    """The loop's notes as a Standard MIDI File, one named track per part. The voice is only ever notes here."""
+    lead, chords, bass = held_parts(lead, chords, bass)
+    tempo = round(step_sec * STEPS_PER_BEAT * 1_000_000).to_bytes(3, "big")
+    tracks = [
+        _midi_track("Lead", 0, [(s, k, int(m)) for s, k, m in note_runs(lead) if m >= 0], b"\x00\xff\x51\x03" + tempo),
+        _midi_track("Chords", 1, [(s, k, int(m)) for s, k, chord in note_runs(chords) for m in chord]),
+        _midi_track("Bass", 2, [(s, k, int(m)) for s, k, m in note_runs(bass) if m >= 0]),
+        _midi_track("Drums", 9, [(s, 1, MIDI_DRUMS[int(h)]) for s, h in enumerate(hits) if h]),
+    ]
+    division = MIDI_TICKS_PER_STEP * STEPS_PER_BEAT
+    header = b"MThd" + (6).to_bytes(4, "big") + (1).to_bytes(2, "big") + len(tracks).to_bytes(2, "big") + division.to_bytes(2, "big")
+    return header + b"".join(tracks)
+
+
 # ------------------------------------------------------------------ loop
 
-def render_loop(
+def render_takes(
     stems: dict,
     *,
     style: str = "soft",
@@ -881,9 +948,11 @@ def render_loop(
     chords_level: float = 1.0,
     bass_level: float = 1.0,
     drums_level: float = 1.0,
+    takes: int = 1,
     progress=None,
-) -> tuple[np.ndarray, dict]:
-    """Transcribe stems and synthesize one seamless loop. Vocal audio is never mixed in."""
+) -> list[dict]:
+    """Transcribe stems once and synthesize up to `takes` seamless loops, best seam first.
+    Each is {audio, info, tracks, midi}. Vocal audio is never mixed in."""
 
     def stage(name: str) -> None:
         if progress:
@@ -925,11 +994,11 @@ def render_loop(
         np.eye(4)[hits] * 0.7,
         np.eye(13)[np.where(bass_notes >= 0, bass_notes % 12, 12)] * 0.7,
     ])
-    start, end, score = choose_loop(
+    chosen = choose_loops(
         features, step_sec, min_seconds, max_seconds,
         first_step=int(np.searchsorted(bounds, start_after)),
+        count=takes,
     )
-    print(f"  loop: {bounds[start]:.2f}s -> {bounds[end]:.2f}s of the original (match score {score:.3f})")
 
     stage("render")
     step_samples = int(round(step_sec * SR))
@@ -937,18 +1006,33 @@ def render_loop(
         space=space, brightness=brightness, lead_level=lead_level,
         chords_level=chords_level, bass_level=bass_level, drums_level=drums_level,
     )
-    if style == "soft" and not classic:
-        audio, tracks = render_soft(melody[start:end], chords[start:end], bass_notes[start:end], hits[start:end], step_samples, **tone)
-    else:
-        audio, tracks = render(melody[start:end], chords[start:end], bass_notes[start:end], hits[start:end], step_samples, classic, **tone)
-    info = {
-        "bpm": round(60 / step_sec / STEPS_PER_BEAT, 1),
-        "key": key_name,
-        "loop_start": round(float(bounds[start]), 2),
-        "loop_end": round(float(bounds[end]), 2),
-        "seconds": round(audio.shape[1] / SR, 1),
-    }
-    return audio, info, tracks
+    rendered = []
+    for start, end, score in chosen:
+        print(f"  loop: {bounds[start]:.2f}s -> {bounds[end]:.2f}s of the original (match score {score:.3f})")
+        parts = (melody[start:end], chords[start:end], bass_notes[start:end], hits[start:end])
+        if style == "soft" and not classic:
+            audio, tracks = render_soft(*parts, step_samples, **tone)
+        else:
+            audio, tracks = render(*parts, step_samples, classic, **tone)
+        rendered.append({
+            "audio": audio,
+            "tracks": tracks,
+            "midi": midi_bytes(*parts, step_samples / SR),
+            "info": {
+                "bpm": round(60 / step_sec / STEPS_PER_BEAT, 1),
+                "key": key_name,
+                "loop_start": round(float(bounds[start]), 2),
+                "loop_end": round(float(bounds[end]), 2),
+                "seconds": round(audio.shape[1] / SR, 1),
+            },
+        })
+    return rendered
+
+
+def render_loop(stems: dict, **options) -> tuple[np.ndarray, dict, dict]:
+    """The one best loop, for the command line."""
+    take = render_takes(stems, takes=1, **options)[0]
+    return take["audio"], take["info"], take["tracks"]
 
 
 # ------------------------------------------------------------------ main

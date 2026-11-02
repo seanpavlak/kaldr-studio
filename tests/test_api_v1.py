@@ -56,7 +56,7 @@ def test_sprite_rejects_other_content_types(client, started):
 
 def test_loop_file_with_every_setting(client, started):
     status, _, _ = client.form("/api/v1/loop", {
-        "rights": "true", "style": "gb", "classic": "true", "lead": "none", "min_seconds": "20",
+        "rights": "true", "takes": "2", "style": "gb", "classic": "true", "lead": "none", "min_seconds": "20",
         "max_seconds": "60", "start_after": "5", "space": "2", "brightness": "0.5", "lead_level": "0",
         "chords_level": "2", "bass_level": "1.5", "drums_level": "0.3",
     }, file=("song.mp3", BLOB))
@@ -64,7 +64,7 @@ def test_loop_file_with_every_setting(client, started):
     loop = started["loop"]
     assert loop["bytes"] == BLOB
     assert loop["name"] == "song.mp3"
-    assert loop["settings"] == {"style": "gb", "classic": True, "lead": "none", "min_seconds": 20.0,
+    assert loop["settings"] == {"takes": 2, "style": "gb", "classic": True, "lead": "none", "min_seconds": 20.0,
                                 "max_seconds": 60.0, "start_after": 5.0, "space": 2.0, "brightness": 0.5,
                                 "lead_level": 0.0, "chords_level": 2.0, "bass_level": 1.5, "drums_level": 0.3}
 
@@ -79,6 +79,8 @@ def test_loop_json_url(client, started):
     ({"url": "https://x.com/s.mp3"}, "confirm you own"),
     ({"url": "https://x.com/s.mp3", "rights": "true", "classic": "maybe"}, "classic must be"),
     ({"url": "https://x.com/s.mp3", "rights": "true", "min_seconds": "100", "max_seconds": "50"}, "shortest loop"),
+    ({"url": "https://x.com/s.mp3", "rights": "true", "takes": "4"}, "takes is out of range"),
+    ({"url": "https://x.com/s.mp3", "rights": "true", "takes": "1.5"}, "whole number"),
 ])
 def test_loop_rejects(client, started, fields, message):
     assert message in error(client.form("/api/v1/loop", fields))

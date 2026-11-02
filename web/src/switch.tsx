@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AudioLines, Box, Boxes, Image, Images, ListMusic, Music } from 'lucide-react'
+import { AudioLines, Box, Boxes, FileDown, Image, Images, ListMusic, Music } from 'lucide-react'
 import { DropdownNavigation, type DropdownNavItem } from '@/components/ui/dropdown-navigation.tsx'
 import { Logo } from './pixel.tsx'
 import { SoundToggle } from './ui.tsx'
@@ -54,6 +54,9 @@ export function StudioHeader({ builder, mode, label, children }: { builder: Buil
       </div>
       <div className="header-end">
         {children}
+        <a className="icon-btn" href="/settings/kaldr-settings.json" download aria-label="Export settings" title="Export settings">
+          <FileDown aria-hidden="true" />
+        </a>
         <SoundToggle />
       </div>
     </header>

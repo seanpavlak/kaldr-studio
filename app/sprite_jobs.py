@@ -268,6 +268,11 @@ def _safe_folder(name: str, used: set[str]) -> str:
     return cleaned
 
 
+def _job_settings(job_id: str) -> str:
+    status = read_status(job_id)
+    return pipeline.settings_file(sprite={"model": status.get("model"), **(status.get("render") or {})})
+
+
 def batch_bundle(batch_id: str) -> bytes | None:
     if not batch_path(batch_id).is_file():
         return None
@@ -288,6 +293,7 @@ def batch_bundle(batch_id: str) -> bytes | None:
                     continue
                 archive.write(path, f"{folder}/{name}")
                 packed += 1
+            archive.writestr(f"{folder}/{pipeline.SETTINGS_NAME}", _job_settings(job_id))
     if packed == 0:
         return None
     return buf.getvalue()
@@ -320,6 +326,8 @@ def bundle(job_id: str) -> bytes | None:
                 continue
             archive.write(path, name)
             packed += 1
+        if packed and (work / "status.json").is_file():
+            archive.writestr(pipeline.SETTINGS_NAME, _job_settings(job_id))
     if packed == 0:
         return None
     return buf.getvalue()

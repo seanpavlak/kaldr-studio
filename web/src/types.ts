@@ -11,6 +11,8 @@ export type RenderSettings = {
   sticker: boolean
 }
 
+export type SavedSprite = RenderSettings & { model: string }
+
 export type JobFiles = {
   reference?: string
   stylized?: string
